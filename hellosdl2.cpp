@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <iostream>
 #include <string>
 #include <sstream>
 #include <windows.h>
@@ -40,11 +41,14 @@ enum Key {
 };
 
 // Screen dimension constants
-const int SCREEN_WIDTH = 1080;
-const int SCREEN_HEIGHT = 640;
+int windowWidth = 1200;
+int windowHeight = 675;
+float aspect = (float) windowWidth / (float) windowHeight;
 
 // The window we'll be rendering to
-SDL_Window* gWindow = nullptr;
+SDL_Window* gWindow   = nullptr;
+unsigned int windowID = 0;
+
 // Images to load
 SDL_Surface* surfaces[TEXTURE_ENUM_LENGTH];
 
@@ -54,17 +58,10 @@ SDL_Texture* gTextures[TEXTURE_ENUM_LENGTH];
 // OpenGL Context
 SDL_GLContext glContext;
 
-// An array of 3 vectors which represents 3 vertices
-static const GLfloat g_vertex_buffer_data[] = {
-   -1.0f, -1.0f, 0.0f,
-    1.0f, -1.0f, 0.0f,
-    0.0f,  1.0f, 0.0f,
-};
-
 unsigned long int keyPressed[KEY_ENUM_LENGTH];
 unsigned long int keysPressed = 0;
 
-void cleanUp() {
+void cleanUpSDL() {
     // Deallocate surface
     for (int i = 0; i < TEXTURE_ENUM_LENGTH; i++) {
         SDL_DestroyTexture(gTextures[i]);
@@ -110,6 +107,25 @@ Key pollKeyEvents() {
             case SDL_QUIT:
                 printf("X clicked...\n");
                 keyPressed[KEY_QUIT] = true;
+                break;
+            case SDL_WINDOWEVENT:
+                if (e.window.windowID == windowID) {
+                    if (e.window.event == SDL_WINDOWEVENT_RESIZED) {
+                        int newWidth  = e.window.data1;
+                        int newHeight = e.window.data2;
+                        printf("Window resized to %dx%d, aspect %f...\n", newWidth, newHeight, (float) newWidth / (float) newHeight);
+                        if((float) newWidth / (float) newHeight > aspect) {
+                            newHeight = (1.f / aspect) * newWidth;
+                        }
+                        else {
+                            newWidth = aspect * newHeight; 
+                        }
+                        printf("Window resized to %dx%d, aspect %f...\n", newWidth, newHeight, (float) newWidth / (float) newHeight);
+                        windowWidth  = newWidth;
+                        windowHeight = newHeight;
+                        // SDL_SetWindowSize(gWindow, windowWidth, windowHeight);
+                    }
+                }
                 break;
             case SDL_KEYDOWN:
                 switch (e.key.keysym.sym) {
@@ -191,54 +207,57 @@ Key pollKeyEvents() {
     return lastPressed;
 }
 
-boolean checkGlErrors() {
+void checkGlErrors(int line, std::string activity) {
     GLenum glError;
-    while ((glError = glGetError()) != 0) {
-        printf("Error: %d\n", glError);
+    std::string errorString;
+    while ((glError = glGetError()) != GL_NO_ERROR) {
+        switch (glError) {
+            case GL_INVALID_ENUM:
+                errorString = "GL_INVALID_ENUM";
+                break;
+            case GL_INVALID_VALUE:
+                errorString = "GL_INVALID_VALUE";
+                break;
+            case GL_INVALID_OPERATION:
+                errorString = "GL_INVALID_OPERATION";
+                break;
+            case GL_STACK_OVERFLOW:
+                errorString = "GL_STACK_OVERFLOW";
+                break;
+            case GL_STACK_UNDERFLOW:
+                errorString = "GL_STACK_UNDERFLOW";
+                break;
+            case GL_OUT_OF_MEMORY:
+                errorString = "GL_OUT_OF_MEMORY";
+        }
+        printf("Line %d: Error %s: %s\n", line, activity.c_str(), errorString.c_str());
     }
-    return glError;
 }
 
 int main(int argc, char* args[]) {
     OBJModel teapot("models\\utah-teapot\\utah-teapot.obj");
     
-    printf("\nPolygons: %d\n\n", teapot.polygonCount);
-
-    printf("Vertices: %d\n", (int)teapot.verticesData.size() / 3);
-    printf("Face 1, Vertex 1: %f\n", teapot.verticesData.front());
-    printf("Face 33, Vertex 2: %f\n", teapot.verticesData.at(100));
-    printf("Face 2016, Vertex 3: %f\n\n", teapot.verticesData.back());
-    
-    printf("TexCoords: %d\n", (int)teapot.texCoordsData.size() / 2);
-    printf("Face 1, TexCoord 1: %f\n", teapot.texCoordsData.front());
-    printf("Face 33, TexCoord 2: %f\n", teapot.texCoordsData.at(100));
-    printf("Face 2016, TexCoord 2: %f\n\n", teapot.texCoordsData.back());
-
-    printf("Normals: %d\n", (int)teapot.normalsData.size() / 3);
-    printf("Face 1, Normal 1: %f\n", teapot.normalsData.front());
-    printf("Face 33, Normal 2: %f\n", teapot.normalsData.at(100));
-    printf("Face 2016, Normal 3: %f\n\n", teapot.normalsData.back());
-    
     // Initialize SDL
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
 		printf("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
-        cleanUp();
+        cleanUpSDL();
         return -1;
 	}
 
     // Create window
-    gWindow = SDL_CreateWindow("OpenGL 4.6", 1, 31, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN|SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
+    gWindow = SDL_CreateWindow("OpenGL 4.6", 1, 31, windowWidth, windowHeight, SDL_WINDOW_SHOWN|SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
     if (!gWindow) {
         printf("Window could not be created! SDL_Error: %s\n", SDL_GetError());
-        cleanUp();
+        cleanUpSDL();
         return -1;
     }
+    windowID = SDL_GetWindowID(gWindow);
     
     // Initialize PNG loading
     int imgFlags = IMG_INIT_PNG;
     if(!(IMG_Init(imgFlags) & imgFlags)) {
         printf( "SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
-        cleanUp();
+        cleanUpSDL();
         return -1;
     }
 
@@ -246,7 +265,7 @@ int main(int argc, char* args[]) {
     glContext = SDL_GL_CreateContext(gWindow);
     if (!glContext) {
         printf("Couldn't create GL Context! SDL_image Error: %s\n", SDL_GetError());
-        cleanUp();
+        cleanUpSDL();
         return -1;
     }
     
@@ -266,122 +285,202 @@ int main(int argc, char* args[]) {
         printf("Using regular VSync instead...");
         if (SDL_GL_SetSwapInterval(1)) {
             printf("Error setting VSync! SDL_image Error: %s\n", SDL_GetError());
-            cleanUp();
+            cleanUpSDL();
             return -1;
         }
     }
 
     glewInit();
 
-    // IDs for our vertex array and (2) vertex buffer objects
+    // IDs for vertex array and (2) vertex buffer objects
     GLuint vao, vbo[2];
 
     // Create VAO
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
+    checkGlErrors(__LINE__, "creating vertex arrays");
 
     // Create VBOs
     glGenBuffers(2, vbo);
+    checkGlErrors(__LINE__, "generating buffers");
 
     // Vertex buffer
     glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
     glBufferData(GL_ARRAY_BUFFER, teapot.verticesData.size() * sizeof(GLfloat), teapot.verticesData.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, &(teapot.verticesData));
+    checkGlErrors(__LINE__, "creating vertices buffer");
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
     glEnableVertexAttribArray(0);
+    checkGlErrors(__LINE__, "enabling vertices attrib");
 
     // Normal buffer
     glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
     glBufferData(GL_ARRAY_BUFFER, teapot.normalsData.size() * sizeof(GLfloat), teapot.normalsData.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, &(teapot.normalsData));
+    checkGlErrors(__LINE__, "creating normals buffer");
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
     glEnableVertexAttribArray(1);
+    checkGlErrors(__LINE__, "enabling normals attrib");
 
-    // // TexCoord buffer
-    // glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
-    // glBufferData(GL_ARRAY_BUFFER, teapot.polygonCount() * 2 * sizeof(GLfloat), teapot.texCoordsData(), GL_STATIC_DRAW);
-    // glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, 0);
-    // glEnableVertexAttribArray(2);
+    /*
+    // TexCoord buffer
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
+    glBufferData(GL_ARRAY_BUFFER, teapot.polygonCount() * 2 * sizeof(GLfloat), teapot.texCoordsData(), GL_STATIC_DRAW);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(2);
+    */
 
+    /*
     // Quad element buffer
-    // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER , vbo[3]);
-    // glBufferData(GL_ELEMENT_ARRAY_BUFFER , teapot.facesCount() * sizeof(GLfloat), teapot.facesData(), GL_STATIC_DRAW);
-    // glVertexAttribPointer(3, 4, GL_UNSIGNED_INT, GL_FALSE, 0, 0);
-    // glEnableVertexAttribArray(3);
-    
-    checkGlErrors();
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER , vbo[3]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER , teapot.facesCount() * sizeof(GLfloat), teapot.facesData(), GL_STATIC_DRAW);
+    glVertexAttribPointer(3, 4, GL_UNSIGNED_INT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(3);
+    */
 
     GLuint program = glCreateProgram();
+    checkGlErrors(__LINE__, "creating program");
 
-    // Read shaders
-    std::stringstream buffer;
+    GLint isSuccess = GL_FALSE;
+	int infoLogLength;
+
+    // Read vertex shader
+    std::stringstream vertBuffer;
     std::ifstream vertStream("shaders\\tutorial2.vert");
-    buffer << vertStream.rdbuf();
-    const GLchar* tutorial2VertSource = (const GLchar*) buffer.str().c_str();
-    // const GLint tutorial2VertSize = (const GLint) buffer.str().length();
-
-    std::ifstream fragStream("shaders\\tutorial2.frag");
-    buffer << fragStream.rdbuf();
-    const GLchar* tutorial2FragSource = (const GLchar*) buffer.str().c_str();
-    // const GLint tutorial2FragSize = (const GLint) buffer.str().length();
-
+    vertBuffer << vertStream.rdbuf();
+    std::string vertString = vertBuffer.str();
+    const GLchar* tutorial2VertSource = (const GLchar*) vertString.c_str();
+    // std::cout << tutorial2VertSource << std::endl;
     GLuint tutorial2Vert = glCreateShader(GL_VERTEX_SHADER);
-    GLuint tutorial2Frag = glCreateShader(GL_FRAGMENT_SHADER);
-
-    glShaderSource(tutorial2Vert, 1, &tutorial2VertSource, 0);
-    glShaderSource(tutorial2Frag, 1, &tutorial2FragSource, 0);
-
+    glShaderSource(tutorial2Vert, 1, &tutorial2VertSource, NULL);
+    checkGlErrors(__LINE__, "setting source for shader \"tutorial2Vert\"");
     glCompileShader(tutorial2Vert);
-    glCompileShader(tutorial2Frag);
-
+    checkGlErrors(__LINE__, "compiling shader \"tutorial2Vert\"");
+    glGetShaderiv(tutorial2Vert, GL_COMPILE_STATUS, &isSuccess);
+	if (isSuccess == GL_FALSE) {
+	    glGetShaderiv(tutorial2Vert, GL_INFO_LOG_LENGTH, &infoLogLength);
+		std::vector<char> errorLog(infoLogLength);
+		glGetShaderInfoLog(tutorial2Vert, infoLogLength, NULL, &errorLog[0]);
+		printf("\nVert Shader Error:\n%s", &errorLog[0]);
+	}
     glAttachShader(program, tutorial2Vert);
+    checkGlErrors(__LINE__, "attaching shader \"tutorial2Vert\"");
+
+    // Read fragment shader
+    std::stringstream fragBuffer;
+    std::ifstream fragStream("shaders\\tutorial2.frag");
+    fragBuffer << fragStream.rdbuf();
+    std::string fragString = fragBuffer.str();
+    const GLchar* tutorial2FragSource = (const GLchar*) fragString.c_str();
+    // std::cout << tutorial2FragSource << std::endl;
+    GLuint tutorial2Frag = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(tutorial2Frag, 1, &tutorial2FragSource, NULL);
+    checkGlErrors(__LINE__, "setting source for shader \"tutorial2Frag\"");
+    glCompileShader(tutorial2Frag);
+    checkGlErrors(__LINE__, "compiling shader \"tutorial2Frag\"");
+    glGetShaderiv(tutorial2Frag, GL_COMPILE_STATUS, &isSuccess);
+	if (isSuccess == GL_FALSE) {
+	    glGetShaderiv(tutorial2Frag, GL_INFO_LOG_LENGTH, &infoLogLength);
+		std::vector<char> errorLog(infoLogLength);
+		glGetShaderInfoLog(tutorial2Frag, infoLogLength, NULL, &errorLog[0]);
+		printf("\nFrag Shader Error:\n%s", &errorLog[0]);
+	}
     glAttachShader(program, tutorial2Frag);
+    checkGlErrors(__LINE__, "attaching shader \"tutorial2Frag\"");
 
     glLinkProgram(program);
+    checkGlErrors(__LINE__, "linking program");
+    glGetProgramiv(program, GL_LINK_STATUS, &isSuccess);
+	if (isSuccess == GL_FALSE) {
+	    glGetProgramiv(program, GL_INFO_LOG_LENGTH, &infoLogLength);
+		std::vector<char> errorLog(infoLogLength);
+		glGetProgramInfoLog(program, infoLogLength, NULL, &errorLog[0]);
+		printf("\nShader Program Error:\n%s", &errorLog[0]);
+	}
 
-    //Set up MVP
-    glm::mat4 model = glm::mat4();
-    GLint uniModel = glGetUniformLocation(program, "model");
-    glUniformMatrix4fv(uniModel, 1, GL_FALSE, glm::value_ptr(model));
+    glDetachShader(program, tutorial2Vert);
+    glDetachShader(program, tutorial2Frag);
+    glDeleteShader(tutorial2Vert);
+    glDeleteShader(tutorial2Frag);
+    checkGlErrors(__LINE__, "detaching/deleting shaders");
 
-    glm::mat4 view = glm::lookAt(
-        glm::vec3(0.0f, 0.0f, 3.0f),
-        glm::vec3(0.0f, 0.0f, 0.0f),
-  		glm::vec3(0.0f, 1.0f, 0.0f)
-    );
+    glUseProgram(program);
+    checkGlErrors(__LINE__, "using program");
 
-    GLint uniView = glGetUniformLocation(program, "view");
-    glUniformMatrix4fv(uniView, 1, GL_FALSE, glm::value_ptr(view));
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    checkGlErrors(__LINE__, "enabling depth testing");
 
-    glm::mat4 proj = glm::perspective(45.0f, 800.0f / 600.0f, 1.0f, 10.0f);
-    GLint uniProj = glGetUniformLocation(program, "proj");
-    glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(proj));
-
-    bool loop = true;
-    while (loop) {
+    float loop = 1.0f;
+    do {
         pollKeyEvents();
 
         if (keyPressed[KEY_ESCAPE] || keyPressed[KEY_QUIT]) {
-            loop = false;
+            loop = 0.0f;
         }
 
+        // Build MVP matrix
+        float rot = loop / 100.0f;
+        glm::mat4 model = glm::mat4(1.0f);
+        glm::mat4 xRot = glm::mat4(
+            glm::vec4(1.0, 0.0, 0.0, 0.0),
+            glm::vec4(0.0, glm::cos(rot), -glm::sin(rot), 0.0),
+            glm::vec4(0.0, glm::sin(rot), glm::cos(rot), 0.0),
+            glm::vec4(0.0, 0.0, 0.0, 1.0)
+        );
+        glm::mat4 yRot = glm::mat4(
+            glm::vec4(glm::cos(rot), glm::sin(rot), 0.0, 0.0),
+            glm::vec4(0.0, 1.0, 0.0, 0.0),
+            glm::vec4(-glm::sin(rot), 0.0, glm::cos(rot), 0.0),
+            glm::vec4(0.0, 0.0, 0.0, 1.0)
+        );
+        glm::mat4 zRot = glm::mat4(
+            glm::vec4(glm::cos(rot), -glm::sin(rot), 0.0, 0.0),
+            glm::vec4(glm::sin(rot), glm::cos(rot), 0.0, 0.0),
+            glm::vec4(0.0, 0.0, 1.0, 0.0),
+            glm::vec4(0.0, 0.0, 0.0, 1.0)
+        );
+        model = zRot * yRot * xRot * model;
+
+        glm::mat4 view = glm::lookAt(
+            glm::vec3(0.0f, 0.0f, 20.0f),
+            glm::vec3(0.0f, 0.0f, 0.0f),
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+
+        glm::mat4 proj = glm::perspective(90.0f, (GLfloat) windowWidth / (GLfloat) windowHeight, 1.0f, 100.0f);
+
+    
+        glm::mat4 mvp = proj * view * model;
+        
+        GLint mvpLocation = glGetUniformLocation(program, "mvp");
+        checkGlErrors(__LINE__, "getting location of uniform \"mvp\"");
+        glUniformMatrix4fv(mvpLocation, 1, GL_FALSE, glm::value_ptr(mvp));
+        checkGlErrors(__LINE__, "creating uniform \"mvp\"");
+        
+        glm::vec3 color = glm::vec3(1.0, 0.5, 0.75);
+
+        GLint colorLocation = glGetUniformLocation(program, "color");
+        checkGlErrors(__LINE__, "getting location of uniform \"color\"");
+        glUniform3fv(colorLocation, 1, glm::value_ptr(color));
+        checkGlErrors(__LINE__, "creating uniform \"color\"");
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDrawArrays(GL_QUADS, 0, teapot.verticesData.size());
+        checkGlErrors(__LINE__, "drawing");
 
         SDL_GL_SwapWindow(gWindow);
-    }
+    } while (loop++);
 
+    glUseProgram(0);
+    glDeleteProgram(program);
     glDisableVertexAttribArray(2);
     glDisableVertexAttribArray(1);
     glDisableVertexAttribArray(0);
-    // glDetachShader(shaderprogram, vertexshader);
-    // glDetachShader(shaderprogram, fragmentshader);
-    // glDeleteProgram(shaderprogram);
-    // glDeleteShader(vertexshader);
-    // glDeleteShader(fragmentshader);
-    glDeleteBuffers(3, vbo);
+    glDeleteBuffers(2, vbo);
     glDeleteVertexArrays(1, &vao);
-    glUseProgram(0);
+    
+    cleanUpSDL();
     
     delete &teapot;
 
-    cleanUp();
 	return 0;
 }

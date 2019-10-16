@@ -1,19 +1,15 @@
-#version 150
-// in_Position was bound to attribute index 0 and in_Normal was bound to attribute index 1
-in vec3 in_Position;
-in vec3 in_Normal;
+#version 450
 
-uniform mat4 view;
-uniform mat4 proj;
+layout(location = 0) in vec3 in_Position;
+layout(location = 1) in vec3 in_Normal;
 
-// We output the ex_Color variable to the next shader in the chain
+uniform mat4 mvp;
+uniform vec3 color;
+
 out vec3 ex_Color;
-void main(void) {
-    // GLSL allows shorthand use of vectors, this is equivelent to:
-    // gl_Position = vec4(in_Position.x, in_Position.y, in_Position.z, 1.0);
 
-    gl_Position = proj * view * vec4(in_Position, 1.0);
+void main() {
+    gl_Position = mvp * vec4(in_Position, 1.0);
 
-    // We're simply passing the color through unmodified
-    ex_Color = in_Color;
+    ex_Color = color * cos(dot(vec3(1.0, 0.0, 0.0), in_Normal));
 }
