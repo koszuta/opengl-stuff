@@ -14,6 +14,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 #include "OBJModel.cpp"
 
@@ -58,154 +59,13 @@ SDL_Texture* gTextures[TEXTURE_ENUM_LENGTH];
 // OpenGL Context
 SDL_GLContext glContext;
 
-unsigned long int keyPressed[KEY_ENUM_LENGTH];
-unsigned long int keysPressed = 0;
+// Camera spherical coordinates
+float camRadius = 50.0;
+float camPolar = glm::pi<float>() / 2.0f;
+float camAzimuth = 0.0;
+float camRot = 0.1;
 
-void cleanUpSDL() {
-    // Deallocate surface
-    for (int i = 0; i < TEXTURE_ENUM_LENGTH; i++) {
-        SDL_DestroyTexture(gTextures[i]);
-        gTextures[i] = nullptr;
-    }
-
-    SDL_GL_DeleteContext(glContext);
-    glContext = nullptr;
-
-    SDL_DestroyWindow(gWindow);
-    gWindow = nullptr;
-
-    // Quit SDL subsystems
-    IMG_Quit();
-    SDL_Quit();
-}
-
-SDL_Texture* loadTexture(std::string path) {
-    SDL_Texture* texture = nullptr;
-    // Load image at specified path
-    SDL_Surface* loadedSurface = IMG_Load(path.c_str());
-    if (loadedSurface == nullptr) {
-        printf("Unable to load image %s! SDL Error: %s\n", path.c_str(), SDL_GetError());
-    }
-    else {
-		// Convert texture to surface pixels
-		// texture = SDL_CreateTextureFromSurface(gRenderer, loadedSurface);
-		if (texture == nullptr) {
-			printf("Unable to create texture from %s! SDL Error: %s\n", path.c_str(), SDL_GetError());
-		}
-
-		// Get rid of old loaded surface
-		SDL_FreeSurface(loadedSurface);
-	}
-    return texture;
-}
-
-Key pollKeyEvents() {
-    SDL_Event e;
-    while (SDL_PollEvent(&e)) {
-        // printf("Event type %d\n", e.type);
-        switch (e.type) {
-            case SDL_QUIT:
-                printf("X clicked...\n");
-                keyPressed[KEY_QUIT] = true;
-                break;
-            case SDL_WINDOWEVENT:
-                if (e.window.windowID == windowID) {
-                    if (e.window.event == SDL_WINDOWEVENT_RESIZED) {
-                        int newWidth  = e.window.data1;
-                        int newHeight = e.window.data2;
-                        printf("Window resized to %dx%d, aspect %f...\n", newWidth, newHeight, (float) newWidth / (float) newHeight);
-                        if((float) newWidth / (float) newHeight > aspect) {
-                            newHeight = (1.f / aspect) * newWidth;
-                        }
-                        else {
-                            newWidth = aspect * newHeight; 
-                        }
-                        printf("Window resized to %dx%d, aspect %f...\n", newWidth, newHeight, (float) newWidth / (float) newHeight);
-                        windowWidth  = newWidth;
-                        windowHeight = newHeight;
-                        // SDL_SetWindowSize(gWindow, windowWidth, windowHeight);
-                    }
-                }
-                break;
-            case SDL_KEYDOWN:
-                switch (e.key.keysym.sym) {
-                    case SDLK_UP:
-                        if (!keyPressed[KEY_UP]) {
-                            printf("Up pressed...\n");
-                            keyPressed[KEY_UP] = ++keysPressed;
-                        }
-                        break;
-                    case SDLK_DOWN:
-                        if (!keyPressed[KEY_DOWN]) {
-                            printf("Down pressed...\n");
-                            keyPressed[KEY_DOWN] = ++keysPressed;
-                        }
-                        break;
-                    case SDLK_LEFT:
-                        if (!keyPressed[KEY_LEFT]) {
-                            printf("Left pressed...\n");
-                            keyPressed[KEY_LEFT] = ++keysPressed;
-                        }
-                        break;
-                    case SDLK_RIGHT:
-                        if (!keyPressed[KEY_RIGHT]) {
-                            printf("Right pressed...\n");
-                            keyPressed[KEY_RIGHT] = ++keysPressed;
-                        }
-                        break;
-                    case SDLK_SPACE:
-                        if (!keyPressed[KEY_SPACE]) {
-                            printf("Space pressed...\n");
-                            keyPressed[KEY_SPACE] = ++keysPressed;
-                        }
-                        break;
-                    case SDLK_ESCAPE:
-                        if (!keyPressed[KEY_ESCAPE]) {
-                            printf("Esc pressed...\n");
-                            keyPressed[KEY_ESCAPE] = ++keysPressed;
-                        }
-                        break;
-                }
-                break;
-            case SDL_KEYUP:
-                switch (e.key.keysym.sym) {
-                    case SDLK_UP:
-                        printf("Up released...\n");
-                        keyPressed[KEY_UP] = 0;
-                        break;
-                    case SDLK_DOWN:
-                        printf("Down released...\n");
-                        keyPressed[KEY_DOWN] = 0;
-                        break;
-                    case SDLK_LEFT:
-                        printf("Left released...\n");
-                        keyPressed[KEY_LEFT] = 0;
-                        break;
-                    case SDLK_RIGHT:
-                        printf("Right released...\n");
-                        keyPressed[KEY_RIGHT] = 0;
-                        break;
-                    case SDLK_SPACE:
-                        printf("Space released...\n");
-                        keyPressed[KEY_SPACE] = 0;
-                        break;
-                    case SDLK_ESCAPE:
-                        printf("Esc released...\n");
-                        keyPressed[KEY_ESCAPE] = 0;
-                        break;
-                }
-        }
-    }
-    Key lastPressed = NONE;
-    unsigned long int highestPress = 0;
-    for (int key = NONE; key < KEY_ENUM_LENGTH; key++) {
-        if (keyPressed[key] > highestPress) {
-            highestPress = keyPressed[key];
-            lastPressed = static_cast<Key>(key);
-        }
-    }
-    return lastPressed;
-}
+bool keyPressed[SDL_SCANCODE_APP2 + 1];
 
 void checkGlErrors(int line, std::string activity) {
     GLenum glError;
@@ -232,6 +92,116 @@ void checkGlErrors(int line, std::string activity) {
         }
         printf("Line %d: Error %s: %s\n", line, activity.c_str(), errorString.c_str());
     }
+}
+
+void cleanUpSDL() {
+    // Deallocate surface
+    for (int i = 0; i < TEXTURE_ENUM_LENGTH; i++) {
+        SDL_DestroyTexture(gTextures[i]);
+        gTextures[i] = nullptr;
+    }
+
+    SDL_GL_DeleteContext(glContext);
+    glContext = nullptr;
+
+    SDL_DestroyWindow(gWindow);
+    gWindow = nullptr;
+
+    // Quit SDL subsystems
+    IMG_Quit();
+    SDL_Quit();
+}
+
+SDL_Keycode pollKeyEvents() {
+    SDL_Scancode lastPressed;
+    SDL_Event e;
+    while (SDL_PollEvent(&e)) {
+        switch (e.type) {
+            case SDL_QUIT:
+                printf("X clicked...\n");
+                lastPressed = (SDL_Scancode) -1;
+                break;
+            case SDL_WINDOWEVENT:
+                if (e.window.windowID == windowID) {
+                    if (e.window.event == SDL_WINDOWEVENT_RESIZED) {
+                        int newWidth  = e.window.data1;
+                        int newHeight = e.window.data2;
+                        printf("Window resized to %dx%d, aspect %f...\n", newWidth, newHeight, (float) newWidth / (float) newHeight);
+                        if((float) newWidth / (float) newHeight > aspect) {
+                            newHeight = (1.f / aspect) * newWidth;
+                        }
+                        else {
+                            newWidth = aspect * newHeight; 
+                        }
+                        printf("Window resized to %dx%d, aspect %f...\n", newWidth, newHeight, (float) newWidth / (float) newHeight);
+                        windowWidth  = newWidth;
+                        windowHeight = newHeight;
+                        // SDL_SetWindowSize(gWindow, windowWidth, windowHeight);
+                    }
+                }
+                break;
+            case SDL_KEYDOWN:
+            case SDL_KEYUP:
+                SDL_Scancode key = e.key.keysym.scancode;
+
+                if (keyPressed[key] && e.type == SDL_KEYUP) {
+                    keyPressed[key] = false;
+                    printf("%x released...\n", key);
+                }
+                else if (!keyPressed[key] && e.type == SDL_KEYDOWN) {
+                    lastPressed = key;
+                    keyPressed[key] = true;
+                    printf("%x pressed...\n", key);
+                }
+                break;
+        }
+    }
+    return lastPressed >= 0 ? SDL_GetKeyFromScancode(lastPressed) : -1;
+}
+
+bool isPressed(SDL_Keycode key) {
+    return keyPressed[SDL_GetScancodeFromKey(key)];
+}
+
+SDL_Texture* loadTexture(std::string path) {
+    SDL_Texture* texture = nullptr;
+    // Load image at specified path
+    SDL_Surface* loadedSurface = IMG_Load(path.c_str());
+    if (loadedSurface == nullptr) {
+        printf("Unable to load image %s! SDL Error: %s\n", path.c_str(), SDL_GetError());
+    }
+    else {
+		// Convert texture to surface pixels
+		// texture = SDL_CreateTextureFromSurface(gRenderer, loadedSurface);
+		if (texture == nullptr) {
+			printf("Unable to create texture from %s! SDL Error: %s\n", path.c_str(), SDL_GetError());
+		}
+
+		// Get rid of old loaded surface
+		SDL_FreeSurface(loadedSurface);
+	}
+    return texture;
+}
+
+void setUniformFloat(GLuint program, float f, std::string name) {
+    GLint location = glGetUniformLocation(program, name.c_str());
+    checkGlErrors(__LINE__, "getting location of uniform \"" + name + "\"");
+    glUniform1f(location, f);
+    checkGlErrors(__LINE__, "creating uniform \"" + name + "\"");
+}
+
+void setUniformVec3(GLuint program, glm::vec3 vec, std::string name) {
+    GLint location = glGetUniformLocation(program, name.c_str());
+    checkGlErrors(__LINE__, "getting location of uniform \"" + name + "\"");
+    glUniform3fv(location, 1, glm::value_ptr(vec));
+    checkGlErrors(__LINE__, "creating uniform \"" + name + "\"");
+}
+
+void setUniformMat4(GLuint program, glm::mat4 mat, std::string name) {
+    GLint location = glGetUniformLocation(program, name.c_str());
+    checkGlErrors(__LINE__, "getting location of uniform \"" + name + "\"");
+    glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(mat));
+    checkGlErrors(__LINE__, "creating uniform \"" + name + "\"");
 }
 
 int main(int argc, char* args[]) {
@@ -409,66 +379,94 @@ int main(int argc, char* args[]) {
     glDepthFunc(GL_LESS);
     checkGlErrors(__LINE__, "enabling depth testing");
 
-    float loop = 1.0f;
-    do {
-        pollKeyEvents();
+    printf("%s\n", glm::to_string(glm::vec3(0.1f, 0.2f, 0.3f) + glm::vec3(0.1f, 0.2f, 0.3f)).c_str());
 
-        if (keyPressed[KEY_ESCAPE] || keyPressed[KEY_QUIT]) {
-            loop = 0.0f;
+    int loop = 0;
+    for (;;) {
+        SDL_Keycode lastPressed = pollKeyEvents();
+
+        if (lastPressed == -1 || keyPressed[SDL_GetScancodeFromKey(SDLK_ESCAPE)]) {
+            break;
+        }
+
+        if (isPressed(SDLK_UP)) {
+            camPolar = glm::max(camPolar - camRot, 0.0f);
+            printf("Polar angle is %f...\n", camPolar);
+        }
+        if (isPressed(SDLK_DOWN)) {
+            camPolar = glm::min(camPolar + camRot, glm::pi<float>());
+            printf("Polar angle is %f...\n", camPolar);
+        }
+        if (isPressed(SDLK_RIGHT)) {
+            camAzimuth += camRot;
+            printf("Azimuth angle is %f...\n", camAzimuth);
+        }
+        if (isPressed(SDLK_LEFT)) {
+            camAzimuth -= camRot;
+            printf("Azimuth angle is %f...\n", camAzimuth);
+        }
+        if (isPressed(SDLK_PAGEUP)) {
+            camRadius -= 3*camRot;
+            printf("Camera radius is %f...\n", camRadius);
+        }
+        if (isPressed(SDLK_PAGEDOWN)) {
+            camRadius += 3*camRot;
+            printf("Camera radius is %f...\n", camRadius);
         }
 
         // Build MVP matrix
         float rot = loop / 100.0f;
         glm::mat4 model = glm::mat4(1.0f);
         glm::mat4 xRot = glm::mat4(
-            glm::vec4(1.0, 0.0, 0.0, 0.0),
-            glm::vec4(0.0, glm::cos(rot), -glm::sin(rot), 0.0),
-            glm::vec4(0.0, glm::sin(rot), glm::cos(rot), 0.0),
-            glm::vec4(0.0, 0.0, 0.0, 1.0)
+            glm::vec4(1.0f, 0.0f, 0.0f, 0.0f),
+            glm::vec4(0.0f, glm::cos(rot), -glm::sin(rot), 0.0f),
+            glm::vec4(0.0f, glm::sin(rot), glm::cos(rot), 0.0f),
+            glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
         );
         glm::mat4 yRot = glm::mat4(
-            glm::vec4(glm::cos(rot), glm::sin(rot), 0.0, 0.0),
-            glm::vec4(0.0, 1.0, 0.0, 0.0),
-            glm::vec4(-glm::sin(rot), 0.0, glm::cos(rot), 0.0),
-            glm::vec4(0.0, 0.0, 0.0, 1.0)
+            glm::vec4(glm::cos(rot), 0.0f, glm::sin(rot), 0.0f),
+            glm::vec4(0.0f, 1.0f, 0.0f, 0.0f),
+            glm::vec4(-glm::sin(rot), 0.0f, glm::cos(rot), 0.0f),
+            glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
         );
         glm::mat4 zRot = glm::mat4(
-            glm::vec4(glm::cos(rot), -glm::sin(rot), 0.0, 0.0),
-            glm::vec4(glm::sin(rot), glm::cos(rot), 0.0, 0.0),
-            glm::vec4(0.0, 0.0, 1.0, 0.0),
-            glm::vec4(0.0, 0.0, 0.0, 1.0)
+            glm::vec4(glm::cos(rot), -glm::sin(rot), 0.0f, 0.0f),
+            glm::vec4(glm::sin(rot), glm::cos(rot), 0.0f, 0.0f),
+            glm::vec4(0.0f, 0.0f, 1.0f, 0.0f),
+            glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
         );
-        model = zRot * yRot * xRot * model;
+        model = zRot * xRot * yRot * model;
 
         glm::mat4 view = glm::lookAt(
-            glm::vec3(0.0f, 0.0f, 20.0f),
+            glm::vec3(camRadius * glm::sin(camPolar) * glm::cos(camAzimuth), camRadius * glm::sin(camPolar) * glm::sin(camAzimuth), camRadius * glm::cos(camPolar)),
             glm::vec3(0.0f, 0.0f, 0.0f),
             glm::vec3(0.0f, 1.0f, 0.0f)
         );
 
-        glm::mat4 proj = glm::perspective(90.0f, (GLfloat) windowWidth / (GLfloat) windowHeight, 1.0f, 100.0f);
+        glm::mat4 proj = glm::perspective(45.0f, (GLfloat) windowWidth / (GLfloat) windowHeight, 1.0f, 100.0f);
 
-    
         glm::mat4 mvp = proj * view * model;
+        setUniformMat4(program, mvp, "mvp");
+        setUniformMat4(program, model, "model");
         
-        GLint mvpLocation = glGetUniformLocation(program, "mvp");
-        checkGlErrors(__LINE__, "getting location of uniform \"mvp\"");
-        glUniformMatrix4fv(mvpLocation, 1, GL_FALSE, glm::value_ptr(mvp));
-        checkGlErrors(__LINE__, "creating uniform \"mvp\"");
-        
-        glm::vec3 color = glm::vec3(1.0, 0.5, 0.75);
+        glm::vec3 color = glm::vec3(1.0f, 0.566f, 0.684f);
+        setUniformVec3(program, color, "color");
 
-        GLint colorLocation = glGetUniformLocation(program, "color");
-        checkGlErrors(__LINE__, "getting location of uniform \"color\"");
-        glUniform3fv(colorLocation, 1, glm::value_ptr(color));
-        checkGlErrors(__LINE__, "creating uniform \"color\"");
+        
+        glm::vec3 sunPos = glm::normalize(glm::vec3(0.0, 1.0, 0.0));
+        setUniformVec3(program, sunPos, "lightDir");
+        float lightMag = 0.7f;
+        setUniformFloat(program, lightMag, "lightMag");
+
+        setUniformFloat(program, 1.0f - lightMag, "ambientMag");
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDrawArrays(GL_QUADS, 0, teapot.verticesData.size());
         checkGlErrors(__LINE__, "drawing");
 
         SDL_GL_SwapWindow(gWindow);
-    } while (loop++);
+        loop++;
+    }
 
     glUseProgram(0);
     glDeleteProgram(program);
