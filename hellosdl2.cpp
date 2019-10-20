@@ -42,8 +42,8 @@ enum Key {
 };
 
 // Screen dimension constants
-int windowWidth = 1200;
-int windowHeight = 675;
+int windowWidth = 1000;
+int windowHeight = 1000;
 float aspect = (float) windowWidth / (float) windowHeight;
 
 // The window we'll be rendering to
@@ -60,7 +60,7 @@ SDL_Texture* gTextures[TEXTURE_ENUM_LENGTH];
 SDL_GLContext glContext;
 
 // Camera spherical coordinates
-float camRadius = 50.0;
+float camRadius = 57.0;
 float camPolar = glm::pi<float>() / 2.0f;
 float camAzimuth = 0.0;
 float camRot = 0.1;
@@ -391,27 +391,21 @@ int main(int argc, char* args[]) {
 
         if (isPressed(SDLK_UP)) {
             camPolar = glm::max(camPolar - camRot, 0.0f);
-            printf("Polar angle is %f...\n", camPolar);
         }
         if (isPressed(SDLK_DOWN)) {
             camPolar = glm::min(camPolar + camRot, glm::pi<float>());
-            printf("Polar angle is %f...\n", camPolar);
         }
         if (isPressed(SDLK_RIGHT)) {
             camAzimuth += camRot;
-            printf("Azimuth angle is %f...\n", camAzimuth);
         }
         if (isPressed(SDLK_LEFT)) {
             camAzimuth -= camRot;
-            printf("Azimuth angle is %f...\n", camAzimuth);
         }
         if (isPressed(SDLK_PAGEUP)) {
             camRadius -= 3*camRot;
-            printf("Camera radius is %f...\n", camRadius);
         }
         if (isPressed(SDLK_PAGEDOWN)) {
             camRadius += 3*camRot;
-            printf("Camera radius is %f...\n", camRadius);
         }
 
         // Build MVP matrix
@@ -437,8 +431,9 @@ int main(int argc, char* args[]) {
         );
         model = zRot * xRot * yRot * model;
 
+        glm::vec3 eye = glm::vec3(camRadius * glm::cos(camPolar), camRadius * glm::sin(camPolar) * glm::sin(camAzimuth), camRadius * glm::sin(camPolar) * glm::cos(camAzimuth));
         glm::mat4 view = glm::lookAt(
-            glm::vec3(camRadius * glm::sin(camPolar) * glm::cos(camAzimuth), camRadius * glm::sin(camPolar) * glm::sin(camAzimuth), camRadius * glm::cos(camPolar)),
+            eye,
             glm::vec3(0.0f, 0.0f, 0.0f),
             glm::vec3(0.0f, 1.0f, 0.0f)
         );
@@ -448,17 +443,23 @@ int main(int argc, char* args[]) {
         glm::mat4 mvp = proj * view * model;
         setUniformMat4(program, mvp, "mvp");
         setUniformMat4(program, model, "model");
+        setUniformVec3(program, eye, "eye");
         
         glm::vec3 color = glm::vec3(1.0f, 0.566f, 0.684f);
         setUniformVec3(program, color, "color");
 
-        
-        glm::vec3 sunPos = glm::normalize(glm::vec3(0.0, 1.0, 0.0));
-        setUniformVec3(program, sunPos, "lightDir");
-        float lightMag = 0.7f;
+        float lightMag = 0.9f;
+        setUniformFloat(program, 1.0f - lightMag, "ambientMag");
         setUniformFloat(program, lightMag, "lightMag");
 
-        setUniformFloat(program, 1.0f - lightMag, "ambientMag");
+        glm::vec3 lightDir = glm::normalize(glm::vec3(0.0, 1.0, 0.0));
+        setUniformVec3(program, lightDir, "lightDir");
+        glm::vec3 halfway = (lightDir + glm::normalize(eye)) / 2.0f;
+        setUniformVec3(program, halfway, "halfway");
+        setUniformFloat(program, 20.0f, "shininess");
+
+        glm::vec3 lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+        setUniformVec3(program, lightColor, "lightColor");
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDrawArrays(GL_QUADS, 0, teapot.verticesData.size());
