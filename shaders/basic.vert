@@ -27,7 +27,7 @@ void main() {
 
     ambient = ambientMag * color;
 
-    diffuse = max(dot(norm, lightDir), 0.0) * color;
+    diffuse = max(0.0, dot(norm, lightDir)) * color;
 
     specular = pow(dot(norm, halfway), shininess) * lightColor;
 }
