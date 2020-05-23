@@ -157,6 +157,7 @@ int main(int argc, char* argv[]) {
             if (glIsEnabled(GL_MULTISAMPLE) == GL_TRUE) {
                 printf("Multisampling is enabled...\n");
             }
+
             // glEnable(GL_CULL_FACE);
             // glCullFace(GL_BACK);
             // Koszutils::checkGlErrors(__LINE__, "enabling backface culling");
@@ -166,7 +167,7 @@ int main(int argc, char* argv[]) {
             int frame = 0;
             bool model_should_rotate = false;
             glm::mat4 model_rot_matrix = glm::mat4(1.0f);
-            while (Input::poll_events() && !Input::should_quit()) {
+            while (Input::poll_events()) {
 
                 if (Input::key_is_down(SDLK_UP) || Input::key_is_down(SDLK_w)) {
                     camPolar = glm::max(camPolar - camRot, 0.0f);
@@ -186,7 +187,7 @@ int main(int argc, char* argv[]) {
                 if (Input::key_is_down(SDLK_PAGEDOWN)) {
                     camRadius += 3*camRot;
                 }
-                if (Input::key_is_down(SDLK_SPACE)) {
+                if (Input::key_was_clicked(SDLK_SPACE)) {
                     model_should_rotate = !model_should_rotate;
                 }
 

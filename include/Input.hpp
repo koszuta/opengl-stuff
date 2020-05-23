@@ -10,20 +10,19 @@ public:
     static void init();
 
     static bool poll_events();
-    static bool should_quit();
 
     // Keyboard events
     static bool key_is_down(SDL_Keycode key);
+    static bool key_was_clicked(SDL_Keycode key);
 
     // Mouse events
 
     // Window events
 
 private:
-    static bool should_quit_;
-
     // Keyboard events
-    static bool keys_[SDL_NUM_SCANCODES];
+    static bool keys_down_[SDL_NUM_SCANCODES];
+    static bool keys_clicked_[SDL_NUM_SCANCODES];
 
     // Mouse events
 

@@ -1,1 +1,1 @@
-g++ hellosdl2.cpp source/*.cpp -o hellosdl2 -Iinclude -Llib -lSDL2/SDL2main -lSDL2/SDL2 -lSDL2/SDL2_image -lGL/glew32 -lGL/OpenGL32 -lGL/GlU32 -g -Wall -Wno-unknown-pragmas
+g++ main.cpp source/*.cpp -o main -Iinclude -Llib -lSDL2/SDL2main -lSDL2/SDL2 -lSDL2/SDL2_image -lGL/glew32 -lGL/OpenGL32 -lGL/GlU32 -g -Wall -Wno-unknown-pragmas
